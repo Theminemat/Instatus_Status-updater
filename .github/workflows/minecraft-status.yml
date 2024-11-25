@@ -13,9 +13,6 @@ jobs:
           # Minecraft Server IP
           SERVER_IP="51.195.36.73:25565"
 
-          # Instatus API-Key
-          API_KEY="552d24a0cfbe89a4197578900bf9b4ab"
-
           # Abrufen des Serverstatus
           STATUS=$(curl -s https://api.mcsrvstat.us/2/$SERVER_IP | jq '.online')
 
@@ -30,9 +27,9 @@ jobs:
             IMPACT="critical"
           fi
 
-          # Senden an die Instatus API
+          # Senden an die Instatus API mit dem Secret
           curl -X POST https://api.instatus.com/v1/pages/tmm/incidents \
-            -H "Authorization: Bearer $API_KEY" \
+            -H "Authorization: Bearer ${{ secrets.INSTATUS_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "Minecraft Server Status",
