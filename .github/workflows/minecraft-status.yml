@@ -2,22 +2,37 @@ name: Minecraft Server Status Update
 
 on:
   schedule:
-    - cron: "*/1 * * * *" # Alle 5 Minuten
+    - cron: "*/1 * * * *" # Alle 1 Minute ausführen
+  workflow_dispatch: # Ermöglicht manuelles Starten
 
 jobs:
   update_status:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Check Minecraft Server Status
+      - name: Checkout Code (Falls nötig)
+        uses: actions/checkout@v3
+
+      - name: Debugging - Installiere Tools
         run: |
-          # Minecraft Server IP
-          SERVER_IP="51.195.36.73:25565"
+          sudo apt-get update
+          sudo apt-get install -y jq curl
 
-          # Abrufen des Serverstatus
-          STATUS=$(curl -s https://api.mcsrvstat.us/2/$SERVER_IP | jq '.online')
+      - name: Überprüfe Minecraft-Serverstatus
+        run: |
+          echo "Überprüfe Minecraft Server Status..."
 
-          # Nachricht basierend auf dem Status
-          if [ "$STATUS" == "true" ]; then
+          # IP des Servers
+          SERVER_IP="51.195.36.73"
+          SERVER_PORT="25565"
+
+          # Überprüfen, ob der Server erreichbar ist
+          STATUS=$(echo | nc -zv $SERVER_IP $SERVER_PORT 2>&1 | grep -o succeeded || echo "failed")
+
+          # Debug-Ausgabe des Status
+          echo "Server Response: $STATUS"
+
+          if [ "$STATUS" == "succeeded" ]; then
             INCIDENT_STATUS="resolved"
             MESSAGE="Minecraft Server is online."
             IMPACT="none"
@@ -27,14 +42,48 @@ jobs:
             IMPACT="critical"
           fi
 
-          # Senden an die Instatus API mit dem Secret
-          curl -X POST https://api.instatus.com/v1/pages/tmm/incidents \
-            -H "Authorization: Bearer ${{ secrets.INSTATUS_API_KEY }}" \
+          # Debugging: Variablen prüfen
+          echo "Incident Status: $INCIDENT_STATUS"
+          echo "Message: $MESSAGE"
+          echo "Impact: $IMPACT"
+
+          # Environment-Variablen setzen
+          echo "INCIDENT_STATUS=$INCIDENT_STATUS" >> $GITHUB_ENV
+          echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
+          echo "IMPACT=$IMPACT" >> $GITHUB_ENV
+
+      - name: Aktualisiere Instatus
+        run: |
+          echo "Sende Anfrage an Instatus API..."
+
+          # API-Key aus den Secrets
+          API_KEY="${{ secrets.INSTATUS_API_KEY }}"
+          PAGE_ID="tmm"
+          COMPONENT_NAME="Minecraft Server"
+
+          # Debugging: Zeige Parameter
+          echo "API_KEY: *** (versteckt)"
+          echo "PAGE_ID: $PAGE_ID"
+          echo "COMPONENT_NAME: $COMPONENT_NAME"
+
+          # Anfrage ausführen
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X POST "https://api.instatus.com/v1/pages/$PAGE_ID/incidents" \
+            -H "Authorization: Bearer $API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "Minecraft Server Status",
-              "status": "'$INCIDENT_STATUS'",
-              "message": "'$MESSAGE'",
-              "impact": "'$IMPACT'",
-              "components": ["Minecraft Server"]
-            }'
+              "status": "'"$INCIDENT_STATUS"'",
+              "message": "'"$MESSAGE"'",
+              "impact": "'"$IMPACT"'",
+              "components": ["'"$COMPONENT_NAME"'"]
+            }')
+
+          # HTTP-Statuscode überprüfen
+          HTTP_CODE=$(cat response.json | jq -r '.statusCode')
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "Fehler: API-Anfrage fehlgeschlagen!"
+            echo "Response: $(cat response.json)"
+            exit 1
+          else
+            echo "Instatus API erfolgreich aktualisiert."
+          fi
