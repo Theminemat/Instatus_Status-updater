@@ -2,7 +2,7 @@ name: Minecraft Server Status Update
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # Alle 5 Minuten
+    - cron: "*/1 * * * *" # Alle 5 Minuten
 
 jobs:
   update_status:
