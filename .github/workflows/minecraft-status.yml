@@ -2,8 +2,8 @@ name: Minecraft Server Status Update
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # Alle 1 Minute ausführen
-  workflow_dispatch:  # Ermöglicht manuelles Starten
+    - cron: "*/5 * * * *"  
+  workflow_dispatch:  
 
 jobs:
   update_status:
@@ -22,11 +22,11 @@ jobs:
         run: |
           echo "Überprüfe Minecraft Server Status..."
 
-          # IP des Servers
+          # Server IP
           SERVER_IP="51.195.36.73"
           SERVER_PORT="25565"
 
-          # Überprüfen, ob der Server erreichbar ist
+
           STATUS=$(echo | nc -zv $SERVER_IP $SERVER_PORT 2>&1 | grep -o succeeded || echo "failed")
 
           # Debug-Ausgabe des Status
