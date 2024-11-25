@@ -2,7 +2,7 @@ name: Minecraft Server Status Update
 
 on:
   schedule:
-    - cron: "*/1 * * * *"  # Alle 1 Minute ausführen
+    - cron: "*/5 * * * *"  # Alle 1 Minute ausführen
   workflow_dispatch:  # Ermöglicht manuelles Starten
 
 jobs:
