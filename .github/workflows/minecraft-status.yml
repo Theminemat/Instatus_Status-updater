@@ -1,0 +1,43 @@
+name: Minecraft Server Status Update
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # Alle 5 Minuten
+
+jobs:
+  update_status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Minecraft Server Status
+        run: |
+          # Minecraft Server IP
+          SERVER_IP="51.195.36.73:25565"
+
+          # Instatus API-Key
+          API_KEY="552d24a0cfbe89a4197578900bf9b4ab"
+
+          # Abrufen des Serverstatus
+          STATUS=$(curl -s https://api.mcsrvstat.us/2/$SERVER_IP | jq '.online')
+
+          # Nachricht basierend auf dem Status
+          if [ "$STATUS" == "true" ]; then
+            INCIDENT_STATUS="resolved"
+            MESSAGE="Minecraft Server is online."
+            IMPACT="none"
+          else
+            INCIDENT_STATUS="investigating"
+            MESSAGE="Minecraft Server is offline."
+            IMPACT="critical"
+          fi
+
+          # Senden an die Instatus API
+          curl -X POST https://api.instatus.com/v1/pages/tmm/incidents \
+            -H "Authorization: Bearer $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Minecraft Server Status",
+              "status": "'$INCIDENT_STATUS'",
+              "message": "'$MESSAGE'",
+              "impact": "'$IMPACT'",
+              "components": ["Minecraft Server"]
+            }'
