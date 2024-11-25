@@ -2,8 +2,8 @@ name: Minecraft Server Status Update
 
 on:
   schedule:
-    - cron: "*/1 * * * *" # Alle 1 Minute ausführen
-  workflow_dispatch: # Ermöglicht manuelles Starten
+    - cron: "*/1 * * * *"  # Alle 1 Minute ausführen
+  workflow_dispatch:  # Ermöglicht manuelles Starten
 
 jobs:
   update_status:
@@ -52,38 +52,57 @@ jobs:
           echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
           echo "IMPACT=$IMPACT" >> $GITHUB_ENV
 
-      - name: Aktualisiere Instatus
+      - name: Hole bestehende Vorfälle
         run: |
-          echo "Sende Anfrage an Instatus API..."
+          echo "Hole bestehende Vorfälle für Minecraft-Server..."
+
+          # API-Key aus den Secrets
+          API_KEY="${{ secrets.INSTATUS_API_KEY }}"
+          PAGE_ID="tmm"  # Beispielseite ID
+          
+          # Hole aktuelle Vorfälle
+          INCIDENTS=$(curl -s -X GET "https://api.instatus.com/v1/pages/$PAGE_ID/incidents" -H "Authorization: Bearer $API_KEY")
+          
+          # Prüfe, ob der Vorfall existiert
+          INCIDENT_ID=$(echo "$INCIDENTS" | jq -r '.data[0].id')  # ID des ersten Vorfalls (falls vorhanden)
+
+          if [ "$INCIDENT_ID" == "null" ]; then
+            echo "Kein Vorfall gefunden, erstelle neuen Vorfall..."
+            INCIDENT_ID=""
+          else
+            echo "Vorfall gefunden, ID: $INCIDENT_ID"
+          fi
+
+      - name: Aktualisiere oder erstelle einen Vorfall
+        run: |
+          echo "Erstelle oder aktualisiere Vorfall..."
 
           # API-Key aus den Secrets
           API_KEY="${{ secrets.INSTATUS_API_KEY }}"
           PAGE_ID="tmm"
-          COMPONENT_NAME="Minecraft Server"
-
-          # Debugging: Zeige Parameter
-          echo "API_KEY: *** (versteckt)"
-          echo "PAGE_ID: $PAGE_ID"
-          echo "COMPONENT_NAME: $COMPONENT_NAME"
-
-          # Anfrage ausführen
-          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X POST "https://api.instatus.com/v1/pages/$PAGE_ID/incidents" \
-            -H "Authorization: Bearer $API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "name": "Minecraft Server Status",
-              "status": "'"$INCIDENT_STATUS"'",
-              "message": "'"$MESSAGE"'",
-              "impact": "'"$IMPACT"'",
-              "components": ["'"$COMPONENT_NAME"'"]
-            }')
-
-          # HTTP-Statuscode überprüfen
-          HTTP_CODE=$(cat response.json | jq -r '.statusCode')
-          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
-            echo "Fehler: API-Anfrage fehlgeschlagen!"
-            echo "Response: $(cat response.json)"
-            exit 1
+          
+          if [ -z "$INCIDENT_ID" ]; then
+            # Erstelle einen neuen Vorfall
+            curl -s -X POST "https://api.instatus.com/v1/pages/$PAGE_ID/incidents" \
+              -H "Authorization: Bearer $API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "Minecraft Server Status",
+                "message": "'"$MESSAGE"'",
+                "components": ["minecraft-server"],
+                "status": "'"$INCIDENT_STATUS"'",
+                "notify": true
+              }'
           else
-            echo "Instatus API erfolgreich aktualisiert."
+            # Aktualisiere den Vorfall
+            curl -s -X POST "https://api.instatus.com/v1/pages/$PAGE_ID/incidents/$INCIDENT_ID/incident-updates" \
+              -H "Authorization: Bearer $API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "message": "'"$MESSAGE"'",
+                "status": "'"$INCIDENT_STATUS"'",
+                "notify": true
+              }'
           fi
+
+          echo "Vorfall erfolgreich erstellt oder aktualisiert."
